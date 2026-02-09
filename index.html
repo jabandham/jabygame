@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Escape The Tusunami For Shapes</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Arial Black', sans-serif; user-select: none; touch-action: none; }
+        #stats { position: absolute; top: 10px; left: 10px; color: yellow; font-size: 24px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; z-index: 10; border: 2px solid #fff; }
+        #upgrade-btn { position: absolute; top: 10px; right: 10px; padding: 15px 25px; background: #ff00ff; color: white; border: 4px solid #fff; cursor: pointer; font-size: 20px; z-index: 11; border-radius: 10px; }
+        #slow-mode-btn { margin-top: 10px; padding: 5px 10px; background: #555; color: white; border: 2px solid #fff; cursor: pointer; font-size: 14px; border-radius: 5px; width: 100%; }
+        #slow-mode-btn.active { background: #00ffff; color: #000; }
+        
+        /* New Mobile Toggle Button */
+        #mobile-toggle-btn { margin-top: 10px; padding: 5px 10px; background: #333; color: white; border: 2px solid #fff; cursor: pointer; font-size: 14px; border-radius: 5px; width: 100%; }
+
+        #interact-ui { position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%); color: white; font-size: 24px; text-align: center; display: none; background: rgba(0,0,0,0.8); padding: 15px 30px; border-radius: 15px; border: 2px solid #fff; }
+        #progress-bar { width: 200px; height: 10px; background: #555; margin-top: 10px; border: 1px solid #fff; }
+        #progress-fill { width: 0%; height: 100%; background: #00ff00; }
+        #audio-notice { position: absolute; bottom: 10px; right: 10px; color: white; background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 5px; pointer-events: none; }
+
+        /* Mobile Control Overlay */
+        .mobile-ctrl { position: absolute; bottom: 40px; display: none; z-index: 100; pointer-events: none; }
+        #move-ctrl { left: 40px; }
+        #look-ctrl { right: 40px; }
+        .btn { 
+            width: 80px; height: 80px; background: rgba(255,255,255,0.2); 
+            border: 4px solid #fff; border-radius: 50%; display: flex; 
+            justify-content: center; align-items: center; color: white; 
+            font-size: 35px; margin: 15px; pointer-events: auto; touch-action: none; 
+        }
+        .btn:active { background: rgba(255,255,255,0.5); }
+        .btn-e { background: rgba(255, 217, 0, 0.4); width: 100px; height: 100px; font-weight: bold; font-size: 24px; }
+    </style>
+</head>
+<body onclick="startAudio()">
+    <div id="audio-notice">🔈 Click anywhere to enable music</div>
+    <div id="stats">
+        💰 Wallet: $<span id="m">0</span><br>
+        ⚡ Speed: <span id="speed-val">18</span><br>
+        <button id="slow-mode-btn">SLOW MODE: OFF</button>
+        <button id="mobile-toggle-btn">MOBILE MODE: OFF</button>
+    </div>
+    <button id="upgrade-btn">👤 +10 SPEED ($50)</button>
+
+    <div id="move-ctrl" class="mobile-ctrl">
+        <div class="btn" id="m-up">▲</div>
+        <div class="btn" id="m-down">▼</div>
+    </div>
+    
+    <div id="look-ctrl" class="mobile-ctrl">
+        <div class="btn btn-e" id="m-e">E</div>
+        <div style="display: flex;">
+            <div class="btn" id="m-left">◀</div>
+            <div class="btn" id="m-right">▶</div>
+        </div>
+    </div>
+
+    <div id="interact-ui">
+        <span id="int-text">HOLD E</span>
+        <div id="progress-bar"><div id="progress-fill"></div></div>
+    </div>
+
+    <audio id="bgm-chill" loop>
+        <source src="https://cdn.pixabay.com/audio/2022/02/22/audio_d0c6ff1bab.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="bgm-danger" loop>
+        <source src="https://cdn.pixabay.com/audio/2022/03/10/audio_c8c8a73a5a.mp3" type="audio/mpeg">
+    </audio>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // Audio Management
+        const chillMusic = document.getElementById('bgm-chill');
+        const dangerMusic = document.getElementById('bgm-danger');
+        let audioStarted = false;
+
+        window.startAudio = () => {
+            if (audioStarted) return;
+            audioStarted = true;
+            chillMusic.volume = 0.5;
+            dangerMusic.volume = 0;
+            chillMusic.play();
+            dangerMusic.play();
+            document.getElementById('audio-notice').style.display = 'none';
+        };
+
+        function crossfadeMusic(toDanger) {
+            if (!audioStarted) return;
+            const step = 0.05;
+            if (toDanger) {
+                if (dangerMusic.volume < 0.5) dangerMusic.volume = Math.min(0.5, dangerMusic.volume + step);
+                if (chillMusic.volume > 0) chillMusic.volume = Math.max(0, chillMusic.volume - step);
+            } else {
+                if (chillMusic.volume < 0.5) chillMusic.volume = Math.min(0.5, chillMusic.volume + step);
+                if (dangerMusic.volume > 0) dangerMusic.volume = Math.max(0, dangerMusic.volume - step);
+            }
+        }
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const ambient = new THREE.AmbientLight(0xffffff, 1.5);
+        scene.add(ambient);
+        const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+        sun.position.set(50, 100, 50);
+        scene.add(sun);
+
+        window.upgradedSpeed = 18; window.isSlowMode = false; window.wallet = 0; window.speedCost = 50;
+
+        const mapWidth = 160, mapLength = 1600, safeLineZ = 400, baseZ = 600, spawnZ = -800;
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(mapWidth, mapLength), new THREE.MeshStandardMaterial({ color: 0x22ff22 }));
+        ground.rotation.x = -Math.PI / 2; scene.add(ground);
+
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+        const walls = [{s:[10,60,mapLength],p:[-85,30,0]}, {s:[10,60,mapLength],p:[85,30,0]}, {s:[170,60,10],p:[0,30,spawnZ]}, {s:[170,60,10],p:[0,30,baseZ+200]}];
+        walls.forEach(w => { const m=new THREE.Mesh(new THREE.BoxGeometry(...w.s), wallMat); m.position.set(...w.p); scene.add(m); });
+
+        const safetyLine = new THREE.Mesh(new THREE.BoxGeometry(160, 2, 10), new THREE.MeshStandardMaterial({color: 0xffff00}));
+        safetyLine.position.set(0, 1, safeLineZ); scene.add(safetyLine);
+
+        const trenches = [];
+        const dirtMat = new THREE.MeshStandardMaterial({ color: 0x5C4033 }); 
+        for(let i=0; i<8; i++) {
+            const zPos = safeLineZ - 100 - (i * 140);
+            const tFloor = new THREE.Mesh(new THREE.BoxGeometry(160, 1, 30), dirtMat); tFloor.position.set(0, -4.5, zPos); scene.add(tFloor);
+            const wallF = new THREE.Mesh(new THREE.BoxGeometry(160, 6, 4), dirtMat); wallF.position.set(0, -2, zPos + 15); scene.add(wallF);
+            const wallB = new THREE.Mesh(new THREE.BoxGeometry(160, 6, 4), dirtMat); wallB.position.set(0, -2, zPos - 15); scene.add(wallB);
+            trenches.push({ z: zPos });
+        }
+
+        const player = new THREE.Group();
+        const yellowMat = new THREE.MeshStandardMaterial({color: 0xffff00});
+        const greenMat = new THREE.MeshStandardMaterial({color: 0x00ff00});
+        const blueMat = new THREE.MeshStandardMaterial({color: 0x0000ff});
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 1), greenMat);
+        const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), yellowMat);
+        head.position.y = 1.6;
+        const lArm = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), yellowMat); lArm.position.set(-1.5, 0, 0);
+        const rArm = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), yellowMat); rArm.position.set(1.5, 0, 0);
+        const lLeg = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), blueMat); lLeg.position.set(-0.5, -2, 0);
+        const rLeg = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), blueMat); rLeg.position.set(0.5, -2, 0);
+        const carryContainer = new THREE.Group(); carryContainer.position.y = 3; 
+        torso.add(head, lArm, rArm, lLeg, rLeg, carryContainer);
+        player.add(torso);
+        const arrow = new THREE.Mesh(new THREE.ConeGeometry(1, 2, 8), new THREE.MeshBasicMaterial({color: 0xffff00, depthTest: false}));
+        arrow.rotation.x = Math.PI; arrow.position.y = 7.5; arrow.visible = false; arrow.renderOrder = 10000;
+        player.add(arrow); player.position.set(0, 3.5, baseZ + 50); scene.add(player);
+
+        function createWaveLabel(emoji, speedText) {
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'white'; ctx.font = 'Bold 80px Arial'; ctx.textAlign = 'center';
+            ctx.fillText(`${emoji} ${speedText}`, 256, 90);
+            return new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
+        }
+
+        const brainrots = [];
+        const geometries = [new THREE.BoxGeometry(2,2,2), new THREE.SphereGeometry(1.2,16,16), new THREE.ConeGeometry(1.5,2.5,8), new THREE.TorusGeometry(1,0.4,8,16)];
+        function spawnB() {
+            const rand = Math.random();
+            const z = safeLineZ - (Math.pow(rand, 1.3) * (safeLineZ - spawnZ - 50));
+            const distanceFactor = (safeLineZ - z) / (safeLineZ - spawnZ);
+            let incomeBase = Math.floor(5 + (distanceFactor * 45)); 
+            let mut="NORMAL", color=new THREE.Color(Math.random()*0xffffff), val = incomeBase;
+            const roll = Math.random();
+            if(distanceFactor > 0.7 && roll < 0.15) { mut="DIAMOND"; color.set(0x00ffff); val = Math.floor(val * 4); } 
+            else if(distanceFactor > 0.4 && roll < 0.25) { mut="GOLD"; color.set(0xffd700); val = Math.floor(val * 2); }
+            const b = new THREE.Mesh(geometries[Math.floor(Math.random()*geometries.length)], new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2 }));
+            b.position.set(Math.random()*140-70, 1.5, z);
+            b.userData = { income: Math.floor(val), color, mut, geo: b.geometry };
+            scene.add(b); brainrots.push(b);
+        }
+        for(let i=0; i<40; i++) spawnB();
+
+        function createBtnTex(text, color) {
+            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d'); ctx.fillStyle = color; ctx.fillRect(0,0,256,256);
+            ctx.fillStyle = 'white'; ctx.font = 'Bold 35px Arial'; ctx.textAlign = 'center';
+            text.split('\n').forEach((t, i) => ctx.fillText(t, 128, 110 + i*50));
+            return new THREE.CanvasTexture(canvas);
+        }
+        function createLabelMat(text1, text2, color) {
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 200;
+            const ctx = canvas.getContext('2d'); ctx.clearRect(0,0,512,200);
+            ctx.fillStyle = color; ctx.font = 'Bold 55px Arial'; ctx.textAlign = 'center';
+            ctx.fillText(text1, 256, 80); ctx.font = 'Bold 40px Arial'; ctx.fillText(text2, 256, 150);
+            return new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) });
+        }
+        function updateUI() { 
+            document.getElementById('m').innerText = Math.floor(window.wallet); 
+            document.getElementById('speed-val').innerText = Math.floor(window.isSlowMode ? 18 : window.upgradedSpeed); 
+            document.getElementById('upgrade-btn').innerText = `👤 +10 SPEED ($${Math.floor(window.speedCost)})`;
+        }
+
+        document.getElementById('upgrade-btn').onclick = () => { if(window.wallet >= window.speedCost) { window.wallet -= Math.floor(window.speedCost); window.upgradedSpeed += 10; window.speedCost = Math.floor(window.speedCost * 3); updateUI(); } };
+        const slowBtn = document.getElementById('slow-mode-btn');
+        slowBtn.onclick = () => { window.isSlowMode = !window.isSlowMode; slowBtn.innerText = window.isSlowMode ? "SLOW MODE: ON" : "SLOW MODE: OFF"; slowBtn.classList.toggle('active'); updateUI(); };
+
+        // MOBILE CONTROL SETUP
+        let mobileActive = false;
+        const mobileKeys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false, KeyE: false };
+        const mobToggle = document.getElementById('mobile-toggle-btn');
+        mobToggle.onclick = () => {
+            mobileActive = !mobileActive;
+            mobToggle.innerText = mobileActive ? "MOBILE CONTROLS: ON" : "MOBILE CONTROLS: OFF";
+            document.getElementById('move-ctrl').style.display = mobileActive ? 'block' : 'none';
+            document.getElementById('look-ctrl').style.display = mobileActive ? 'block' : 'none';
+        };
+
+        function bindMobile(id, key) {
+            const el = document.getElementById(id);
+            el.addEventListener('pointerdown', (e) => { e.preventDefault(); mobileKeys[key] = true; });
+            el.addEventListener('pointerup', (e) => { e.preventDefault(); mobileKeys[key] = false; });
+            el.addEventListener('pointerleave', (e) => { e.preventDefault(); mobileKeys[key] = false; });
+        }
+        bindMobile('m-up', 'KeyW'); bindMobile('m-down', 'KeyS');
+        bindMobile('m-left', 'KeyA'); bindMobile('m-right', 'KeyD');
+        bindMobile('m-e', 'KeyE');
+
+        const slots = [];
+        for(let i=0; i<10; i++) {
+            const g = new THREE.Group();
+            const colBtn = new THREE.Mesh(new THREE.BoxGeometry(5, 0.6, 5), new THREE.MeshStandardMaterial({ map: createBtnTex("$0\nCOLLECT", "#00aa00") }));
+            colBtn.position.set(-3, 1, 3);
+            const upBtn = new THREE.Mesh(new THREE.BoxGeometry(5, 0.6, 5), new THREE.MeshStandardMaterial({ map: createBtnTex("LVL 1\n$100", "#0000aa") }));
+            upBtn.position.set(3, 1, 3);
+            const label = new THREE.Sprite(createLabelMat("EMPTY", "WALK HERE", "#555555"));
+            label.position.y = 7; label.scale.set(12, 5, 1);
+            g.add(new THREE.Mesh(new THREE.BoxGeometry(12,2,12), new THREE.MeshStandardMaterial({color: 0x444444})), colBtn, upBtn, label);
+            g.position.set(-45 + (i%5 * 22), 0.5, baseZ + 60 + (Math.floor(i/5) * 30)); scene.add(g);
+            slots.push({ g, colBtn, upBtn, label, isActive: false, income: 0, storedCash: 0, lvl: 1, upCost: 100, data: null });
+        }
+
+        const keys = {}; const waves = []; let lastWave = 0, holdTime = 0, heldItem = null;
+        window.onkeydown=(e)=>keys[e.code]=true; window.onkeyup=(e)=>{keys[e.code]=false; if(e.code==='KeyE')holdTime=0;};
+        setInterval(() => { slots.forEach(s => { if(s.isActive) { s.storedCash += Math.floor(s.income); s.colBtn.material.map = createBtnTex(`$${Math.floor(s.storedCash)}\nCOLLECT`, "#00aa00"); } }); }, 1000);
+
+        function animate(time) {
+            requestAnimationFrame(animate);
+
+            // Merge Input
+            const activeKeys = { ...keys };
+            if(mobileActive) Object.keys(mobileKeys).forEach(k => { if(mobileKeys[k]) activeKeys[k] = true; });
+
+            if(time - lastWave > 4000) {
+                const roll = Math.random(); let color, speed, emo, sTxt;
+                if(roll < 0.2) { color = 0xff0000; speed = 7.5; emo = "😡"; sTxt = "FAST"; } 
+                else if(roll < 0.5) { color = 0x00ff00; speed = 4.5; emo = "😐"; sTxt = "NORMAL"; } 
+                else { color = 0x0066ff; speed = 2.5; emo = "😃"; sTxt = "SLOW"; }
+                const w = new THREE.Mesh(new THREE.BoxGeometry(170, 80, 10), new THREE.MeshStandardMaterial({ color, opacity: 1 }));
+                w.position.set(0, 40, spawnZ + 20); 
+                const lbl = createWaveLabel(emo, sTxt); lbl.position.y = 50; lbl.scale.set(60, 15, 1); w.add(lbl);
+                w.userData = { speed }; scene.add(w); waves.push(w); lastWave = time;
+            }
+
+            const sDown = activeKeys['KeyS'];
+            
+            // Flip UI Arrows visually when S is held
+            if(mobileActive) {
+                document.getElementById('m-left').innerText = sDown ? "▶" : "◀";
+                document.getElementById('m-right').innerText = sDown ? "◀" : "▶";
+            }
+
+            const moving = activeKeys['KeyW'] || activeKeys['KeyS'] || activeKeys['KeyA'] || activeKeys['KeyD'];
+            let currentMoveSpeed = window.isSlowMode ? 18 : window.upgradedSpeed;
+            const moveAmt = currentMoveSpeed * 0.05;
+            let moveX = 0, moveZ = 0;
+
+            if(activeKeys['KeyW']) moveZ -= 1;
+            if(activeKeys['KeyS']) moveZ += 1;
+            // Logical reversal so Left is still Left relative to world when moving backwards
+            if(activeKeys['KeyA']) moveX += sDown ? 1 : -1; 
+            if(activeKeys['KeyD']) moveX += sDown ? -1 : 1;
+
+            if(moving) {
+                const angle = Math.atan2(moveX, moveZ);
+                player.rotation.y = THREE.MathUtils.lerp(player.rotation.y, angle + Math.PI, 0.2);
+                let nX = player.position.x + (moveX * moveAmt);
+                let nZ = player.position.z + (moveZ * moveAmt);
+                if(nX > -75 && nX < 75) player.position.x = nX;
+                if(nZ > spawnZ + 10 && nZ < baseZ + 180) player.position.z = nZ;
+                const animSpeed = time * 0.01;
+                const swing = Math.sin(animSpeed) * 0.5;
+                lArm.rotation.x = swing; rArm.rotation.x = -swing;
+                lLeg.rotation.x = -swing; rLeg.rotation.x = swing;
+                torso.position.y = Math.sin(animSpeed * 2) * 0.1;
+            } else {
+                lArm.rotation.x = rArm.rotation.x = lLeg.rotation.x = rLeg.rotation.x = 0; torso.position.y = 0;
+            }
+
+            crossfadeMusic(player.position.z < safeLineZ);
+
+            let inT = false;
+            trenches.forEach(t => { if(Math.abs(player.position.z - t.z) < 15 && player.position.z < safeLineZ) inT = true; });
+            player.position.y = THREE.MathUtils.lerp(player.position.y, inT ? -1.5 : 3.5, 0.1);
+
+            waves.forEach((w, i) => {
+                w.position.z += w.userData.speed;
+                if(w.position.z >= safeLineZ) { scene.remove(w); waves.splice(i,1); return; }
+                if(!inT && Math.abs(w.position.z - player.position.z) < 8) { player.position.set(0, 3.5, baseZ + 50); heldItem = null; arrow.visible = false; carryContainer.clear(); }
+            });
+
+            const nearB = brainrots.find(b => player.position.distanceTo(b.position) < 8);
+            const nearS = slots.find(sl => player.position.distanceTo(sl.g.position) < 12);
+            const ui = document.getElementById('interact-ui');
+
+            if(nearB && !heldItem) {
+                ui.style.display = 'block'; 
+                document.getElementById('int-text').innerHTML = `<span style="color:${nearB.userData.color.getStyle()}">${nearB.userData.mut} ($${Math.floor(nearB.userData.income)}/s)</span><br>HOLD E`;
+                if(activeKeys['KeyE']) {
+                    holdTime += 16; document.getElementById('progress-fill').style.width = (holdTime/1000*100)+'%';
+                    if(holdTime > 1000) { heldItem = nearB.userData; scene.remove(nearB); brainrots.splice(brainrots.indexOf(nearB),1); spawnB(); holdTime = 0; arrow.visible = true; carryContainer.add(new THREE.Mesh(heldItem.geo, new THREE.MeshStandardMaterial({ color: heldItem.color, emissive: heldItem.color, emissiveIntensity: 0.5 }))); }
+                }
+            } else if(nearS && heldItem) {
+                ui.style.display = 'block'; document.getElementById('int-text').innerText = "TAP E TO SWAP/PLACE";
+                if(activeKeys['KeyE']) { 
+                    if(nearS.isActive) window.wallet += Math.floor(nearS.income * 10);
+                    nearS.isActive = true; nearS.income = Math.floor(heldItem.income); nearS.data = { mut: heldItem.mut, color: heldItem.color.getStyle() };
+                    nearS.label.material = createLabelMat(nearS.data.mut, `$${Math.floor(nearS.income)}/s`, nearS.data.color);
+                    heldItem = null; arrow.visible = false; carryContainer.clear(); updateUI();
+                }
+            } else { ui.style.display = 'none'; document.getElementById('progress-fill').style.width = '0%'; }
+
+            slots.forEach(sl => {
+                if(!sl.isActive) return;
+                if(player.position.distanceTo(sl.g.position.clone().add(new THREE.Vector3(-3,1,3))) < 5 && sl.storedCash > 0) { window.wallet += Math.floor(sl.storedCash); sl.storedCash = 0; sl.colBtn.material.map = createBtnTex(`$0\nCOLLECT`, "#00aa00"); updateUI(); }
+                if(player.position.distanceTo(sl.g.position.clone().add(new THREE.Vector3(3,1,3))) < 5 && window.wallet >= sl.upCost) { window.wallet -= Math.floor(sl.upCost); sl.lvl++; sl.income = Math.floor(sl.income * 1.1); sl.upCost = Math.floor(sl.upCost * 3); sl.upBtn.material.map = createBtnTex(`LVL ${sl.lvl}\n$${Math.floor(sl.upCost)}`, "#0000aa"); sl.label.material = createLabelMat(sl.data.mut, `$${Math.floor(sl.income)}/s`, sl.data.color); updateUI(); }
+            });
+
+            // Camera System with 180 flip
+            let camOffset = sDown ? new THREE.Vector3(0, 24, -40) : new THREE.Vector3(0, 24, 40);
+            let lookAtPos = sDown ? player.position.clone().add(new THREE.Vector3(0, 0, 60)) : player.position.clone().add(new THREE.Vector3(0, 0, -60));
+            camera.position.lerp(player.position.clone().add(camOffset), 0.1);
+            camera.lookAt(lookAtPos);
+            renderer.render(scene, camera);
+        }
+        animate(0);
+    </script>
+</body>
+</html>
