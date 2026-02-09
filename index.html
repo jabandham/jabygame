@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Escape The Tusunami For Shapes</title>
+    <title>Escape The Tususnami For Shapes</title>
     <style>
         body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Arial Black', sans-serif; user-select: none; touch-action: none; }
         #stats { position: absolute; top: 10px; left: 10px; color: yellow; font-size: 24px; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; z-index: 10; border: 2px solid #fff; }
@@ -40,7 +40,7 @@
     </div>
     
     <div id="look-ctrl" class="mobile-ctrl">
-        <div class="btn btn-e" id="m-e">E</div>
+        <div class="btn btn-e" id="m-e">TAP E</div>
         <div style="display: flex;">
             <div class="btn" id="m-left">◀</div>
             <div class="btn" id="m-right">▶</div>
@@ -170,7 +170,8 @@
             else if(distanceFactor > 0.4 && roll < 0.25) { mut="GOLD"; color.set(0xffd700); val = Math.floor(val * 2); }
             const b = new THREE.Mesh(geometries[Math.floor(Math.random()*geometries.length)], new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.2 }));
             b.position.set(Math.random()*140-70, 1.5, z);
-            b.userData = { income: Math.floor(val), color, mut, geo: b.geometry };
+            // Added deathTime for auto-despawn every 30-60s
+            b.userData = { income: Math.floor(val), color, mut, geo: b.geometry, deathTime: performance.now() + (30000 + Math.random() * 30000) };
             scene.add(b); brainrots.push(b);
         }
         for(let i=0; i<40; i++) spawnB();
@@ -240,17 +241,24 @@
         function animate(time) {
             requestAnimationFrame(animate);
 
+            // DESPAWN LOGIC FOR BRAINROTS
+            for(let i = brainrots.length - 1; i >= 0; i--) {
+                if(time > brainrots[i].userData.deathTime) {
+                    scene.remove(brainrots[i]);
+                    brainrots.splice(i, 1);
+                    spawnB();
+                }
+            }
+
             const activeKeys = { ...keys };
             if(mobileActive) Object.keys(mobileKeys).forEach(k => { if(mobileKeys[k]) activeKeys[k] = true; });
 
             if(time - lastWave > 4000) {
                 const roll = Math.random(); 
                 let color, speed, emo, sTxt, h;
-                
                 if(roll < 0.2) { color = 0xff0000; speed = 7.5; emo = "😡"; sTxt = "FAST"; h = 120; } 
                 else if(roll < 0.5) { color = 0x00ff00; speed = 4.5; emo = "😐"; sTxt = "MEDIUM"; h = 90; } 
                 else { color = 0x0066ff; speed = 2.5; emo = "😃"; sTxt = "SLOW"; h = 60; }
-                
                 const waveGeo = new THREE.PlaneGeometry(170, h, 1, 10);
                 const pos = waveGeo.attributes.position;
                 for(let i=0; i<pos.count; i++) {
@@ -260,13 +268,11 @@
                 }
                 waveGeo.computeVertexNormals();
                 const w = new THREE.Mesh(waveGeo, new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, transparent: true, opacity: 0.85 }));
-                
                 w.position.set(0, 0, spawnZ + 20); 
                 const lbl = createWaveLabel(emo, sTxt); 
-                lbl.position.set(0, 12, 26); // Adjusted height to be "not too tall, not too short"
+                lbl.position.set(0, 12, 26); // Tuning preserved
                 lbl.scale.set(60, 15, 1); 
                 w.add(lbl);
-                
                 w.userData = { speed, height: h, tipOffset: 25 }; scene.add(w); waves.push(w); lastWave = time;
             }
 
